@@ -3,7 +3,7 @@
 {% block content %}
 {% set pot = sc.potential %}
 <div class="page-head">
-  <h1>{{ client.name }} <small>{{ client.serti_code or '' }}</small></h1>
+  <h1>{{ client.name }} <small>{{ client.serti_code or '' }}{% if client.branch %} · {{ client.branch }}{% endif %}</small></h1>
   <div class="year-nav">
     <a href="?year={{ year - 1 }}">◀ {{ year - 1 }}</a>
     <strong>{{ year }}</strong>
@@ -32,8 +32,42 @@
     <div class="fields">
       <label>Nom du client <input name="name" value="{{ client.name }}" required></label>
       <label>Num. adresse Serti <input name="serti_code" value="{{ client.serti_code or '' }}"></label>
-      <label>Représentant / responsable <input name="account_manager" value="{{ client.account_manager or '' }}"></label>
+      <label>Succursale <input name="branch" value="{{ client.branch or '' }}" list="branches"></label>
     </div>
+    <datalist id="branches">{% for b in branches %}<option value="{{ b }}">{% endfor %}</datalist>
+  </fieldset>
+
+  <fieldset class="card">
+    <legend>Équipe client</legend>
+    <table class="grid team">
+      <thead><tr><th>Rôle</th><th>Nom</th></tr></thead>
+      <tbody>
+      {% for role, label in TEAM_ROLES %}{% set m = client.team_member(role) %}
+        <tr>
+          <td>
+            {% if role == 'direction' %}
+            <div class="role-with-title">{{ label }}
+              <select name="team__direction__title" aria-label="Titre">
+                <option value="">Titre…</option>
+                {% for t in DIRECTION_TITLES %}<option {{ 'selected' if m and m.title == t }}>{{ t }}</option>{% endfor %}
+              </select>
+            </div>
+            {% else %}{{ label }}{% endif %}
+          </td>
+          <td><input name="team__{{ role }}__name" value="{{ m.name if m else '' }}"></td>
+        </tr>
+      {% endfor %}
+      {% set others = client.other_team %}
+      {% for i in range(others|length + 2) %}{% set m = others[i] if i < others|length else none %}
+        <tr>
+          <td><input name="other__{{ i }}__title" value="{{ m.title or '' if m else '' }}" placeholder="Autre rôle (ex.: Représentant pièces)"></td>
+          <td><input name="other__{{ i }}__name" value="{{ m.name if m else '' }}" placeholder="Nom"></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <input type="hidden" name="other_count" value="{{ client.other_team|length + 2 }}">
+    <p class="hint">Videz un nom pour retirer le membre. Deux lignes « autre » vides sont toujours offertes après l'enregistrement.</p>
   </fieldset>
 
   <fieldset class="card">

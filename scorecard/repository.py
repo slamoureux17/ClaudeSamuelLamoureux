@@ -4,7 +4,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import Assessment, Client, QuarterlyReview, ServiceUsage, YearMetrics
+from .models import OTHER_ROLE, TEAM_ROLES, Assessment, Client, QuarterlyReview, ServiceUsage, TeamMember, YearMetrics
 
 
 def get_or_create_client(session: Session, name: str, serti_code: str | None) -> Client:
@@ -69,3 +69,20 @@ def upsert_review(session: Session, client: Client, year: int, quarter: int, **v
     for key, value in values.items():
         setattr(review, key, value)
     return review
+
+
+def set_team(client: Client, main: dict[str, tuple[str | None, str | None]],
+             others: list[tuple[str | None, str | None]]) -> None:
+    """Remplace l'équipe client.
+
+    ``main``: {rôle: (nom, titre)} pour les rôles principaux; ``others``: [(rôle libre, nom)].
+    Les lignes sans nom sont ignorées.
+    """
+    client.team.clear()
+    for role, _ in TEAM_ROLES:
+        name, title = main.get(role, (None, None))
+        if name:
+            client.team.append(TeamMember(role=role, name=name, title=title or None))
+    for title, name in others:
+        if name:
+            client.team.append(TeamMember(role=OTHER_ROLE, name=name, title=title or None))

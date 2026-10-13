@@ -11,12 +11,20 @@ import re
 import openpyxl
 from sqlalchemy.orm import Session
 
-from ..models import ACTION_STATUSES, PROJETE, REEL, SERVICES, Action, Client
-from ..repository import get_or_create_client, set_services, upsert_assessment, upsert_metrics, upsert_review
+from ..models import ACTION_STATUSES, PROJETE, REEL, SERVICES, TEAM_ROLES, Action, Client
+from ..repository import (
+    get_or_create_client,
+    set_services,
+    set_team,
+    upsert_assessment,
+    upsert_metrics,
+    upsert_review,
+)
 from ..textutil import normalize, parse_date, parse_number, parse_pct
 
 SERVICE_BY_LABEL = {normalize(label): key for key, label in SERVICES}
 
+TEAM_ROLE_BY_LABEL = {normalize(label): key for key, label in TEAM_ROLES}
 STATUS_BY_LABEL = {normalize(label).split(" ")[0]: key for key, label in ACTION_STATUSES}
 
 METRIC_ROWS = {
@@ -57,6 +65,27 @@ def import_onepager(session: Session, data: bytes) -> list[Client]:
     return clients
 
 
+def _import_team(ws, client: Client) -> None:
+    """Bloc « Équipe client » (colonne H: rôle, colonne I: nom), tel que produit par l'export."""
+    header = next((r for r in range(1, ws.max_row + 1) if normalize(ws.cell(r, 8).value) == "equipe client"), None)
+    if header is None:
+        return
+    main: dict[str, tuple[str | None, str | None]] = {}
+    others: list[tuple[str | None, str | None]] = []
+    row = header + 1
+    while row <= ws.max_row and ws.cell(row, 8).value:
+        label = str(ws.cell(row, 8).value).strip()
+        name = str(ws.cell(row, 9).value or "").strip() or None
+        title = re.search(r"\(([^)]+)\)\s*$", label)
+        role = TEAM_ROLE_BY_LABEL.get(normalize(re.sub(r"\s*\([^)]*\)\s*$", "", label)))
+        if role:
+            main[role] = (name, title.group(1).strip() if title else None)
+        else:
+            others.append((label, name))
+        row += 1
+    set_team(client, main, others)
+
+
 def _import_sheet(session: Session, ws, ws_values) -> Client | None:
     labels = {row: normalize(ws.cell(row, 1).value) for row in range(1, ws.max_row + 1)}
     find = lambda prefix: next((r for r, label in labels.items() if label.startswith(prefix)), None)  # noqa: E731
@@ -67,6 +96,10 @@ def _import_sheet(session: Session, ws, ws_values) -> Client | None:
     serti_row = find("num. adresse serti") or find("no. serti") or find("code serti")
     serti = str(ws.cell(serti_row, 2).value).strip() if serti_row and ws.cell(serti_row, 2).value else None
     client = get_or_create_client(session, str(ws.cell(name_row, 2).value).strip(), serti)
+    branch_row = find("succursale")
+    if branch_row and ws.cell(branch_row, 2).value:
+        client.branch = str(ws.cell(branch_row, 2).value).strip()
+    _import_team(ws, client)
 
     # --- Section 1: colonnes années / scénarios ---
     header_row = find("section") or find("1. donnees historiques")

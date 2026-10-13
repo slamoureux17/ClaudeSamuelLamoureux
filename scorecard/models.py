@@ -45,6 +45,18 @@ PROJETE = "projete"
 
 TOPGRADING_GRADES = ["A", "B", "C", "D"]
 
+# Équipe client: rôles principaux (un membre chacun sur la fiche) puis « autre » (illimité, rôle libre).
+CX_REP = "experience_client"
+TEAM_ROLES: list[tuple[str, str]] = [
+    ("ventes_camions", "Représentant ventes camions"),
+    (CX_REP, "Représentant expérience client"),
+    ("direction", "Membre de la direction"),
+    ("conseiller_technique", "Conseiller technique service"),
+]
+OTHER_ROLE = "autre"
+TEAM_ROLE_LABELS = dict(TEAM_ROLES) | {OTHER_ROLE: "Autre"}
+DIRECTION_TITLES = ["DG", "VP", "Co-Président"]
+
 ACTION_STATUSES = [("a_faire", "À faire"), ("en_cours", "En cours"), ("fait", "Fait"), ("annule", "Annulé")]
 ACTION_STATUS_LABELS = dict(ACTION_STATUSES)
 
@@ -63,7 +75,7 @@ class Client(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
     serti_code: Mapped[str | None] = mapped_column(String(50), unique=True)
-    account_manager: Mapped[str | None] = mapped_column(String(100))
+    branch: Mapped[str | None] = mapped_column(String(100))  # succursale
 
     # Section 2 – potentiel
     potential_annual: Mapped[float | None] = mapped_column(Float)
@@ -85,6 +97,42 @@ class Client(Base):
         back_populates="client", cascade="all, delete-orphan", order_by="Action.id"
     )
     reviews: Mapped[list[QuarterlyReview]] = relationship(back_populates="client", cascade="all, delete-orphan")
+    team: Mapped[list[TeamMember]] = relationship(
+        back_populates="client", cascade="all, delete-orphan", order_by="TeamMember.id"
+    )
+
+    def team_member(self, role: str) -> TeamMember | None:
+        return next((m for m in self.team if m.role == role), None)
+
+    @property
+    def cx_rep(self) -> str | None:
+        member = self.team_member(CX_REP)
+        return member.name if member else None
+
+    @property
+    def other_team(self) -> list[TeamMember]:
+        return [m for m in self.team if m.role == OTHER_ROLE]
+
+
+class TeamMember(Base):
+    """Membre de l'équipe Camions BL assigné au client."""
+
+    __tablename__ = "team_members"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(30))
+    name: Mapped[str] = mapped_column(String(100))
+    # Direction: DG / VP / Co-Président; « autre »: le rôle en clair (ex.: Représentant pièces).
+    title: Mapped[str | None] = mapped_column(String(100))
+
+    client: Mapped[Client] = relationship(back_populates="team")
+
+    @property
+    def role_label(self) -> str:
+        if self.role == OTHER_ROLE:
+            return self.title or "Autre"
+        return TEAM_ROLE_LABELS.get(self.role, self.role)
 
 
 class YearMetrics(Base):

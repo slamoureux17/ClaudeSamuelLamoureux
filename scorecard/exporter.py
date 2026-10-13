@@ -8,7 +8,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from .metrics import build_scorecard
-from .models import ACTION_STATUS_LABELS, Client
+from .models import ACTION_STATUS_LABELS, TEAM_ROLES, Client
 
 HEADER_FILL = PatternFill("solid", fgColor="1F3864")
 SECTION_FILL = PatternFill("solid", fgColor="D9E1F2")
@@ -18,6 +18,7 @@ THIN = Border(*(Side(style="thin", color="BFBFBF"),) * 4)
 WRAP = Alignment(wrap_text=True, vertical="top")
 MONEY = '#,##0 $;-#,##0 $'
 PCT = "0.0%"
+TEAM_HEADER_ROW = 11
 
 
 def export_client(client: Client, year: int) -> bytes:
@@ -36,7 +37,8 @@ def write_sheet(ws, client: Client, year: int) -> None:
 
     ws["A1"], ws["B1"] = "Nom du client", client.name
     ws["A2"], ws["B2"] = "Num. adresse Serti", client.serti_code
-    ws["A1"].font = ws["A2"].font = BOLD
+    ws["A3"], ws["B3"] = "Succursale", client.branch
+    ws["A1"].font = ws["A2"].font = ws["A3"].font = BOLD
 
     # En-tête section 1 (B..E = colonnes, F = différence)
     header = ["Section / Élément"] + [c.label for c in cols] + ["Différence"]
@@ -133,9 +135,29 @@ def write_sheet(ws, client: Client, year: int) -> None:
         ws.cell(4 + q, 9, review.result if review else None).alignment = WRAP
         ws.cell(4 + q, 10, review.notes if review else None).alignment = WRAP
 
+    # Équipe client (colonnes H..I, sous le suivi trimestriel)
+    for i, value in enumerate(["Équipe client", "Nom"], start=8):
+        cell = ws.cell(TEAM_HEADER_ROW, i, value)
+        cell.font, cell.fill = WHITE_BOLD, HEADER_FILL
+    for offset, (label, name) in enumerate(team_rows(client), start=1):
+        ws.cell(TEAM_HEADER_ROW + offset, 8, label)
+        ws.cell(TEAM_HEADER_ROW + offset, 9, name)
+
     for letter, width in {"A": 38, "B": 16, "C": 16, "D": 16, "E": 16, "F": 14, "G": 3, "H": 24, "I": 40, "J": 60}.items():
         ws.column_dimensions[letter].width = width
     ws.freeze_panes = "B5"
+
+
+def team_rows(client: Client) -> list[tuple[str, str | None]]:
+    """Rôles principaux (même vides, pour servir de gabarit) puis les autres membres."""
+    rows = []
+    for role, label in TEAM_ROLES:
+        member = client.team_member(role)
+        if role == "direction" and member and member.title:
+            label = f"{label} ({member.title})"
+        rows.append((label, member.name if member else None))
+    rows += [(m.title or "Autre", m.name) for m in client.other_team]
+    return rows
 
 
 def _section(ws, row: int, title: str, width: int) -> None:

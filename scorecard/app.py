@@ -20,8 +20,17 @@ from .exporter import export_client
 from .importers.onepager import import_onepager
 from .importers.sales import import_sales_csv, import_sales_sql
 from .metrics import build_scorecard, portfolio_row, scorecard_columns
-from .models import ACTION_STATUSES, SERVICES, TOPGRADING_GRADES, Action, Client
-from .repository import set_services, upsert_assessment, upsert_metrics, upsert_review
+from .models import (
+    ACTION_STATUSES,
+    CX_REP,
+    DIRECTION_TITLES,
+    SERVICES,
+    TEAM_ROLES,
+    TOPGRADING_GRADES,
+    Action,
+    Client,
+)
+from .repository import set_services, set_team, upsert_assessment, upsert_metrics, upsert_review
 from .textutil import parse_date, parse_number, parse_pct
 
 BASE_DIR = Path(__file__).parent
@@ -65,7 +74,8 @@ def _input_money(value) -> str:
 
 
 templates.env.filters.update(money=_money, pct=_pct, date=_date, input_pct=_input_pct, input_money=_input_money)
-templates.env.globals.update(SERVICES=SERVICES, ACTION_STATUSES=ACTION_STATUSES, TOPGRADING=TOPGRADING_GRADES)
+templates.env.globals.update(SERVICES=SERVICES, ACTION_STATUSES=ACTION_STATUSES, TOPGRADING=TOPGRADING_GRADES,
+                             TEAM_ROLES=TEAM_ROLES, DIRECTION_TITLES=DIRECTION_TITLES)
 
 
 def _redirect(url: str, msg: str | None = None, error: bool = False) -> RedirectResponse:
@@ -96,6 +106,8 @@ def _render(request: Request, name: str, **context) -> HTMLResponse:
 
 SORTS = {
     "nom": (lambda r: r["client"].name.lower(), False),
+    "succursale": (lambda r: ((r["client"].branch or "~").lower(), r["client"].name.lower()), False),
+    "experience": (lambda r: ((r["client"].cx_rep or "~").lower(), r["client"].name.lower()), False),
     "revenus": (lambda r: r["last_revenue"] or 0, True),
     "gap": (lambda r: r["potential"].gap or 0, True),
     "penetration": (lambda r: r["potential"].penetration if r["potential"].penetration is not None else 2, False),
@@ -105,14 +117,17 @@ SORTS = {
 
 
 @app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, q: str = "", tri: str = "gap", year: int | None = None,
+def dashboard(request: Request, q: str = "", tri: str = "gap", succursale: str = "", year: int | None = None,
               session: Session = Depends(get_session)):
     year = year or get_settings().year
     clients = session.scalars(select(Client)).all()
+    branches = _branches(session)
+    if succursale:
+        clients = [c for c in clients if (c.branch or "") == succursale]
     if q:
         needle = q.lower()
-        clients = [c for c in clients if needle in c.name.lower() or needle in (c.serti_code or "").lower()
-                   or needle in (c.account_manager or "").lower()]
+        clients = [c for c in clients if any(needle in (text or "").lower() for text in
+                                             (c.name, c.serti_code, c.branch, *(m.name for m in c.team)))]
     rows = [portfolio_row(c, year) for c in clients]
     key, reverse = SORTS.get(tri, SORTS["gap"])
     rows.sort(key=key, reverse=reverse)
@@ -130,23 +145,30 @@ def dashboard(request: Request, q: str = "", tri: str = "gap", year: int | None 
         ((a, c) for c in clients for a in c.actions if a.is_open and a.due_date),
         key=lambda pair: pair[0].due_date,
     )[:10]
-    return _render(request, "dashboard.html", rows=rows, totals=totals, q=q, tri=tri, year=year, upcoming=upcoming)
+    return _render(request, "dashboard.html", rows=rows, totals=totals, q=q, tri=tri, year=year, upcoming=upcoming,
+                   branches=branches, succursale=succursale)
+
+
+def _branches(session: Session) -> list[str]:
+    """Succursales déjà saisies (liste de choix et filtre)."""
+    return sorted(b for b in session.scalars(select(Client.branch).distinct()) if b)
 
 
 # --- Clients ---
 
 @app.get("/clients/nouveau", response_class=HTMLResponse)
-def new_client_form(request: Request):
-    return _render(request, "client_new.html")
+def new_client_form(request: Request, session: Session = Depends(get_session)):
+    return _render(request, "client_new.html", branches=_branches(session))
 
 
 @app.post("/clients")
-def create_client(name: str = Form(...), serti_code: str = Form(""), account_manager: str = Form(""),
-                  session: Session = Depends(get_session)):
+def create_client(name: str = Form(...), serti_code: str = Form(""), branch: str = Form(""),
+                  cx_rep: str = Form(""), session: Session = Depends(get_session)):
     serti_code = serti_code.strip() or None
     if serti_code and session.scalar(select(Client).where(Client.serti_code == serti_code)):
         return _redirect("/clients/nouveau", f"Le code Serti {serti_code} existe déjà.", error=True)
-    client = Client(name=name.strip(), serti_code=serti_code, account_manager=account_manager.strip() or None)
+    client = Client(name=name.strip(), serti_code=serti_code, branch=branch.strip() or None)
+    set_team(client, {CX_REP: (cx_rep.strip() or None, None)}, [])
     session.add(client)
     session.commit()
     return _redirect(f"/clients/{client.id}", "Client créé.")
@@ -157,7 +179,7 @@ def client_page(request: Request, client_id: int, year: int | None = None, sessi
     client = _client_or_404(session, client_id)
     year = year or get_settings().year
     return _render(request, "client.html", client=client, sc=build_scorecard(client, year), year=year,
-                   candidates=None)
+                   candidates=None, branches=_branches(session))
 
 
 @app.post("/clients/{client_id}/fiche")
@@ -175,7 +197,12 @@ async def save_scorecard(request: Request, client_id: int, session: Session = De
     ):
         return _redirect(f"/clients/{client.id}?year={year}", f"Le code Serti {serti_code} est déjà utilisé.", True)
     client.serti_code = serti_code
-    client.account_manager = get("account_manager") or None
+    client.branch = get("branch") or None
+    set_team(
+        client,
+        {role: (get(f"team__{role}__name") or None, get(f"team__{role}__title") or None) for role, _ in TEAM_ROLES},
+        [(get(f"other__{i}__title"), get(f"other__{i}__name")) for i in range(int(get("other_count") or 0))],
+    )
 
     for col in scorecard_columns(year):
         values = {
@@ -298,7 +325,7 @@ def pipedrive_search(request: Request, client_id: int, term: str = Form(""), yea
     except pipedrive.PipedriveError as exc:
         return _redirect(f"/clients/{client_id}?year={year}", str(exc), error=True)
     return _render(request, "client.html", client=client, sc=build_scorecard(client, year), year=year,
-                   candidates=candidates)
+                   candidates=candidates, branches=_branches(session))
 
 
 @app.post("/clients/{client_id}/pipedrive/lier")

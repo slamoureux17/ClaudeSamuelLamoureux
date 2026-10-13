@@ -6,8 +6,11 @@
   <div class="fields stacked">
     <label>Nom du client <input name="name" required autofocus></label>
     <label>Num. adresse Serti <input name="serti_code" placeholder="ex.: TRAJMF"></label>
-    <label>Représentant / responsable <input name="account_manager"></label>
+    <label>Succursale <input name="branch" list="branches"></label>
+    <label>Représentant expérience client <input name="cx_rep"></label>
   </div>
+  <datalist id="branches">{% for b in branches %}<option value="{{ b }}">{% endfor %}</datalist>
+  <p class="hint">Le reste de l'équipe client se complète sur la fiche.</p>
   <button>Créer</button>
 </form>
 {% endblock %}

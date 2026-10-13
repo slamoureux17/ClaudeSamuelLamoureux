@@ -4,7 +4,13 @@
 <div class="page-head">
   <h1>Portefeuille clients {{ year }}</h1>
   <form method="get" class="inline">
-    <input type="search" name="q" value="{{ q }}" placeholder="Client, code Serti, représentant">
+    <input type="search" name="q" value="{{ q }}" placeholder="Client, code Serti, membre de l'équipe">
+    {% if branches %}
+    <select name="succursale" onchange="this.form.submit()">
+      <option value="">Toutes les succursales</option>
+      {% for b in branches %}<option {{ 'selected' if b == succursale }}>{{ b }}</option>{% endfor %}
+    </select>
+    {% endif %}
     <input type="hidden" name="tri" value="{{ tri }}">
     <button>Rechercher</button>
   </form>
@@ -25,12 +31,14 @@
   <div class="kpi {{ 'alert' if totals.overdue }}"><span>Actions en retard</span><strong>{{ totals.overdue }}</strong></div>
 </section>
 
-{% set sort_link = '?q=' ~ q ~ '&tri=' %}
+{% set sort_link = '?q=' ~ q|urlencode ~ '&succursale=' ~ succursale|urlencode ~ '&tri=' %}
+<div class="table-scroll">
 <table class="grid">
   <thead>
     <tr>
       <th><a href="{{ sort_link }}nom">Client</a></th>
-      <th>Serti</th>
+      <th><a href="{{ sort_link }}succursale">Succursale</a></th>
+      <th><a href="{{ sort_link }}experience">Rep. expérience client</a></th>
       <th class="num"><a href="{{ sort_link }}revenus">Revenus {{ year - 1 }}</a></th>
       <th class="num">Projeté {{ year }}</th>
       <th class="num"><a href="{{ sort_link }}atteinte">Actuel {{ year }}</a></th>
@@ -50,8 +58,9 @@
     {% set c = r.client %}
     <tr>
       <td><a href="/clients/{{ c.id }}?year={{ year }}"><strong>{{ c.name }}</strong></a>
-        {% if c.account_manager %}<br><small>{{ c.account_manager }}</small>{% endif %}</td>
-      <td>{{ c.serti_code or '—' }}</td>
+        {% if c.serti_code %}<br><small>{{ c.serti_code }}</small>{% endif %}</td>
+      <td>{{ c.branch or '—' }}</td>
+      <td>{{ c.cx_rep or '—' }}</td>
       <td class="num">{{ r.last_revenue|money }}</td>
       <td class="num">{{ r.projected|money }}</td>
       <td class="num">{{ r.actual|money }}{% if r.attainment is not none %}<br><small>{{ r.attainment|pct }}</small>{% endif %}</td>
@@ -71,10 +80,11 @@
       <td>{% if c.pipedrive_org_id %}<span class="tag ok">lié</span>{% else %}—{% endif %}</td>
     </tr>
   {% else %}
-    <tr><td colspan="14" class="empty">Aucun client. <a href="/clients/nouveau">Créez-en un</a> ou <a href="/importer">importez un scorecard Excel</a>.</td></tr>
+    <tr><td colspan="15" class="empty">Aucun client. <a href="/clients/nouveau">Créez-en un</a> ou <a href="/importer">importez un scorecard Excel</a>.</td></tr>
   {% endfor %}
   </tbody>
 </table>
+</div>
 
 {% if upcoming %}
 <h2>Prochaines actions</h2>

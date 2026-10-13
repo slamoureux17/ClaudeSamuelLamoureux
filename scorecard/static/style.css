@@ -114,3 +114,8 @@ ul.deals li { display: flex; justify-content: space-between; border-bottom: 1px 
 ul.candidates li, ul.history li { padding: 4px 0; }
 code { background: var(--light); padding: 0 4px; border-radius: 3px; font-size: 12px; }
 .card > h2:first-child { margin-top: 0; }
+table.team td:first-child { width: 45%; }
+.role-with-title { display: flex; gap: 8px; align-items: center; }
+.role-with-title select { width: auto; }
+.page-head select { width: auto; }
+.table-scroll { overflow-x: auto; }

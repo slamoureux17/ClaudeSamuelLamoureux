@@ -7,6 +7,8 @@ gabarit **Scorecard Client One-Pager** (`exemples/Scorecard_Client_OnePager.xlsx
 
 | Section du gabarit | Dans l'outil |
 |---|---|
+| Identification | Nom, num. adresse Serti, succursale. |
+| Équipe client | Représentant ventes camions, représentant expérience client, membre de la direction (DG, VP ou Co-Président), conseiller technique service, et autant d'« autres » rôles que nécessaire (rôle libre). |
 | 1. Données historiques | Revenus, marge brute, % marge service / pièces, % marge global calculé, colonnes N-2, N-1, N projeté, N actuel et différence (projeté − actuel). Grille des 10 services utilisés (Pièces, Excelerator, Service, SAAQ, Unité mobile, Alignement, Jockey, Location BL, Ventes camions, Académie). |
 | 2. Potentiel global | Potentiel annuel estimé, revenus actuels (saisis ou, par défaut, ceux de l'année précédente), % de pénétration et gap à combler. |
 | 3. Analyse qualitative | Topgrading (A–D) et satisfaction (/5) par année, points forts, enjeux, potentiel de croissance (conservés par année). |
@@ -15,10 +17,12 @@ gabarit **Scorecard Client One-Pager** (`exemples/Scorecard_Client_OnePager.xlsx
 
 En plus :
 
-- **Tableau de bord du portefeuille** : potentiel total, pénétration, gap, atteinte des objectifs,
+- **Tableau de bord du portefeuille** : succursale et représentant expérience client de chaque client,
+  filtre par succursale, recherche par nom de membre de l'équipe, potentiel total, pénétration, gap, atteinte des objectifs,
   actions en retard, tri par gap / pénétration / revenus, prochaines échéances de tous les clients.
 - **Navigation par année** (◀ 2025 · 2026 · 2027 ▶) : l'historique est conservé.
-- **Export Excel** de chaque fiche au format du gabarit (formules incluses), réimportable.
+- **Export Excel** de chaque fiche au format du gabarit (formules incluses), réimportable;
+  la succursale (A3) et l'équipe client (bloc « Équipe client », colonnes H–I) y sont ajoutées.
 - **Importation** des scorecards Excel existants (une feuille = un client).
 
 ## Sources de données
