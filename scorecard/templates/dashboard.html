@@ -11,10 +11,17 @@
       {% for b in branches %}<option {{ 'selected' if b == succursale }}>{{ b }}</option>{% endfor %}
     </select>
     {% endif %}
+    {% if cx_reps %}
+    <select name="rep" onchange="this.form.submit()" aria-label="Représentant expérience client">
+      <option value="">Tous les reps expérience client</option>
+      {% for name in cx_reps %}<option {{ 'selected' if name == rep }}>{{ name }}</option>{% endfor %}
+      <option value="{{ unassigned_rep }}" {{ 'selected' if rep == unassigned_rep }}>(Sans rep expérience client)</option>
+    </select>
+    {% endif %}
     <input type="hidden" name="tri" value="{{ tri }}">
     <button>Rechercher</button>
   </form>
-  <a class="button secondary" href="/actions-pipedrive.csv?succursale={{ succursale|urlencode }}">Actions ouvertes (CSV Pipedrive)</a>
+  <a class="button secondary" href="/actions-pipedrive.csv?succursale={{ succursale|urlencode }}&rep={{ rep|urlencode }}">Actions ouvertes (CSV Pipedrive)</a>
   {% if settings.pipedrive_enabled %}
   <form method="post" action="/pipedrive/synchroniser" class="inline">
     <button class="secondary">Synchroniser tout avec Pipedrive</button>
@@ -32,7 +39,7 @@
   <div class="kpi {{ 'alert' if totals.overdue }}"><span>Actions en retard</span><strong>{{ totals.overdue }}</strong></div>
 </section>
 
-{% set sort_link = '?q=' ~ q|urlencode ~ '&succursale=' ~ succursale|urlencode ~ '&tri=' %}
+{% set sort_link = '?q=' ~ q|urlencode ~ '&succursale=' ~ succursale|urlencode ~ '&rep=' ~ rep|urlencode ~ '&tri=' %}
 <div class="table-scroll">
 <table class="grid">
   <thead>

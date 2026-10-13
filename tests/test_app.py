@@ -51,6 +51,10 @@ def test_import_edit_and_export(web):
     assert "JMF Transport" in web.get("/?succursale=Drummondville").text
     assert "JMF Transport" not in web.get("/?succursale=Laval").text
     assert "JMF Transport" in web.get("/?q=julie").text
+    assert "JMF Transport" in web.get("/?rep=Julie Côté").text
+    assert "JMF Transport" not in web.get("/?rep=Annie Gagnon").text
+    assert "JMF Transport" not in web.get("/?rep=__aucun__").text
+    assert "<option selected>Julie Côté</option>" in web.get("/?rep=Julie Côté").text
 
     page = web.get("/clients/1")
     assert 'class="result-cell status-rouge"' in page.text and 'class="result-cell status-vert"' in page.text
@@ -91,6 +95,11 @@ def test_clearing_a_name_removes_the_member(web):
     assert 'value="Julie"' in page.text
     web.post("/clients/1/fiche", data={"year": "2026", "name": "Test", "team__experience_client__name": ""})
     assert "Julie" not in web.get("/").text
+    assert ">Test<" in web.get("/?rep=__aucun__").text
+    web.post("/clients", data={"name": "Autre", "cx_rep": "Annie"})
+    web.post("/clients/2/actions", data={"title": "Appeler Annie", "year": "2026"})
+    assert "Appeler Annie" in web.get("/actions-pipedrive.csv?rep=Annie").text
+    assert "Appeler Annie" not in web.get("/actions-pipedrive.csv?rep=__aucun__").text
 
 
 def test_migrates_old_database(tmp_path):

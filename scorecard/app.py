@@ -121,13 +121,13 @@ SORTS = {
 
 
 @app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, q: str = "", tri: str = "gap", succursale: str = "", year: int | None = None,
-              session: Session = Depends(get_session)):
+def dashboard(request: Request, q: str = "", tri: str = "gap", succursale: str = "", rep: str = "",
+              year: int | None = None, session: Session = Depends(get_session)):
     year = year or get_settings().year
-    clients = session.scalars(select(Client)).all()
+    all_clients = session.scalars(select(Client)).all()
     branches = _branches(session)
-    if succursale:
-        clients = [c for c in clients if (c.branch or "") == succursale]
+    cx_reps = sorted({c.cx_rep for c in all_clients if c.cx_rep}, key=str.lower)
+    clients = _filter_clients(all_clients, succursale, rep)
     if q:
         needle = q.lower()
         clients = [c for c in clients if any(needle in (text or "").lower() for text in
@@ -150,7 +150,22 @@ def dashboard(request: Request, q: str = "", tri: str = "gap", succursale: str =
         key=lambda pair: pair[0].due_date,
     )[:10]
     return _render(request, "dashboard.html", rows=rows, totals=totals, q=q, tri=tri, year=year, upcoming=upcoming,
-                   branches=branches, succursale=succursale)
+                   branches=branches, succursale=succursale, cx_reps=cx_reps, rep=rep,
+                   unassigned_rep=UNASSIGNED_REP)
+
+
+UNASSIGNED_REP = "__aucun__"
+
+
+def _filter_clients(clients: list[Client], succursale: str = "", rep: str = "") -> list[Client]:
+    """Filtres du portefeuille: succursale et représentant expérience client (ou clients sans représentant)."""
+    if succursale:
+        clients = [c for c in clients if (c.branch or "") == succursale]
+    if rep == UNASSIGNED_REP:
+        clients = [c for c in clients if not c.cx_rep]
+    elif rep:
+        clients = [c for c in clients if c.cx_rep == rep]
+    return clients
 
 
 def _branches(session: Session) -> list[str]:
@@ -355,10 +370,8 @@ def export_actions_csv(client_id: int, session: Session = Depends(get_session)):
 
 
 @app.get("/actions-pipedrive.csv")
-def export_all_actions_csv(succursale: str = "", session: Session = Depends(get_session)):
-    clients = session.scalars(select(Client).order_by(Client.name)).all()
-    if succursale:
-        clients = [c for c in clients if c.branch == succursale]
+def export_all_actions_csv(succursale: str = "", rep: str = "", session: Session = Depends(get_session)):
+    clients = _filter_clients(session.scalars(select(Client).order_by(Client.name)).all(), succursale, rep)
     return _csv_response(actions_csv(clients), f"Actions_Pipedrive_{dt.date.today().isoformat()}.csv")
 
 

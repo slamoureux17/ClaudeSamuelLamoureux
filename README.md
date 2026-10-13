@@ -18,6 +18,7 @@ gabarit **Scorecard Client One-Pager** (`exemples/Scorecard_Client_OnePager.xlsx
 En plus :
 
 - **Tableau de bord du portefeuille** : succursale et représentant expérience client de chaque client,
+  filtre par représentant expérience client (ou clients sans représentant),
   filtre par succursale, recherche par nom de membre de l'équipe, potentiel total, pénétration, gap, atteinte des objectifs,
   actions en retard, tri par gap / pénétration / revenus, prochaines échéances de tous les clients.
 - **Navigation par année** (◀ 2025 · 2026 · 2027 ▶) : l'historique est conservé.
