@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Nouveau client{% endblock %}
+{% block content %}
+<h1>Nouveau client</h1>
+<form method="post" action="/clients" class="card narrow">
+  <div class="fields stacked">
+    <label>Nom du client <input name="name" required autofocus></label>
+    <label>Num. adresse Serti <input name="serti_code" placeholder="ex.: TRAJMF"></label>
+    <label>Représentant / responsable <input name="account_manager"></label>
+  </div>
+  <button>Créer</button>
+</form>
+{% endblock %}

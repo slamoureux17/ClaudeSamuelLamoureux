@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% block title %}{{ client.name }}{% endblock %}
+{% block content %}
+{% set pot = sc.potential %}
+<div class="page-head">
+  <h1>{{ client.name }} <small>{{ client.serti_code or '' }}</small></h1>
+  <div class="year-nav">
+    <a href="?year={{ year - 1 }}">◀ {{ year - 1 }}</a>
+    <strong>{{ year }}</strong>
+    <a href="?year={{ year + 1 }}">{{ year + 1 }} ▶</a>
+  </div>
+  <a class="button secondary" href="/clients/{{ client.id }}/export.xlsx?year={{ year }}">Exporter en Excel</a>
+</div>
+
+<section class="kpis">
+  <div class="kpi"><span>Potentiel annuel</span><strong>{{ pot.potential|money }}</strong></div>
+  <div class="kpi"><span>Revenus actuels</span><strong>{{ pot.current|money }}</strong></div>
+  <div class="kpi"><span>Pénétration</span><strong>{{ pot.penetration|pct }}</strong></div>
+  <div class="kpi"><span>Gap à combler</span><strong>{{ pot.gap|money }}</strong></div>
+  <div class="kpi"><span>Atteinte {{ year }}</span><strong>{{ sc.attainment|pct }}</strong></div>
+  <div class="kpi {{ 'alert' if sc.overdue_actions }}"><span>Actions ouvertes</span><strong>{{ sc.open_actions }}</strong>
+    {% if sc.overdue_actions %}<small>{{ sc.overdue_actions }} en retard</small>{% endif %}</div>
+</section>
+
+<div class="layout">
+<div class="main-col">
+<form method="post" action="/clients/{{ client.id }}/fiche" id="fiche">
+  <input type="hidden" name="year" value="{{ year }}">
+
+  <fieldset class="card">
+    <legend>Identification</legend>
+    <div class="fields">
+      <label>Nom du client <input name="name" value="{{ client.name }}" required></label>
+      <label>Num. adresse Serti <input name="serti_code" value="{{ client.serti_code or '' }}"></label>
+      <label>Représentant / responsable <input name="account_manager" value="{{ client.account_manager or '' }}"></label>
+    </div>
+  </fieldset>
+
+  <fieldset class="card">
+    <legend>1. Données historiques</legend>
+    <table class="grid scorecard">
+      <thead>
+        <tr><th>Élément</th>{% for col in sc.columns %}<th class="num">{{ col.label }}</th>{% endfor %}<th class="num">Différence</th></tr>
+      </thead>
+      <tbody>
+      {% for r in sc.rows %}
+        <tr>
+          <td>{{ r.label }}</td>
+          {% for col in sc.columns %}
+          <td class="num">
+            {% if r.editable %}
+              {% set v = r['values'][col.key] %}
+              <input class="num" name="m__{{ col.key }}__{{ r.field }}" inputmode="decimal"
+                     value="{{ v|input_pct if r.fmt == 'pct' else v|input_money }}"
+                     placeholder="{{ '%' if r.fmt == 'pct' else '$' }}">
+            {% else %}
+              <strong>{{ r['values'][col.key]|pct(1) }}</strong>
+            {% endif %}
+          </td>
+          {% endfor %}
+          <td class="num">{{ r.diff|money if r.diff is not none else '' }}</td>
+        </tr>
+      {% endfor %}
+        <tr class="subhead">
+          <td>Nombre de services utilisés</td>
+          {% for col in sc.columns %}<td class="num"><strong>{{ sc.services[col.key]|length }}</strong></td>{% endfor %}
+          <td></td>
+        </tr>
+      {% for key, label in sc.service_list %}
+        <tr>
+          <td class="indent">{{ label }}</td>
+          {% for col in sc.columns %}
+          <td class="center"><input type="checkbox" name="svc__{{ col.key }}__{{ key }}" value="1"
+               {{ 'checked' if key in sc.services[col.key] }}></td>
+          {% endfor %}
+          <td></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="hint">Les % de marge se saisissent en pourcentage (ex.: 77). La différence = projeté − actuel.
+      Les données importées de Serti ou de la base SQL peuvent être corrigées ici.</p>
+  </fieldset>
+
+  <fieldset class="card">
+    <legend>2. Potentiel global du client</legend>
+    <div class="fields">
+      <label>Potentiel annuel total (estimé)
+        <input class="num" name="potential_annual" inputmode="decimal" value="{{ client.potential_annual|input_money }}"></label>
+      <label>Revenus actuels avec Camions BL
+        <input class="num" name="current_revenue_override" inputmode="decimal"
+               value="{{ client.current_revenue_override|input_money }}"
+               placeholder="Auto: revenus {{ year - 1 }}"></label>
+      <div class="readonly"><span>% de pénétration actuelle</span><strong>{{ pot.penetration|pct(1) }}</strong></div>
+      <div class="readonly"><span>Gap à combler</span><strong>{{ pot.gap|money }}</strong></div>
+    </div>
+  </fieldset>
+
+  <fieldset class="card">
+    <legend>3. Analyse qualitative</legend>
+    <table class="grid">
+      <thead><tr><th></th>{% for y in sc.assessment_years %}<th>{{ y }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        <tr>
+          <td>Résultat Topgrading client</td>
+          {% for y in sc.assessment_years %}{% set a = sc.assessments[y] %}
+          <td><select name="a__{{ y }}__topgrading">
+            <option value="">—</option>
+            {% for g in TOPGRADING %}<option {{ 'selected' if a and a.topgrading == g }}>{{ g }}</option>{% endfor %}
+          </select></td>
+          {% endfor %}
+        </tr>
+        <tr>
+          <td>Niveau de satisfaction client (/5)</td>
+          {% for y in sc.assessment_years %}{% set a = sc.assessments[y] %}
+          <td><select name="a__{{ y }}__satisfaction">
+            <option value="">—</option>
+            {% for n in range(1, 6) %}<option value="{{ n }}" {{ 'selected' if a and a.satisfaction == n }}>{{ n }}</option>{% endfor %}
+          </select></td>
+          {% endfor %}
+        </tr>
+      </tbody>
+    </table>
+    {% set cur = sc.assessments[year] %}
+    {% set prev = sc.assessments[year - 1] %}
+    <div class="fields stacked">
+      <label>Points forts de la relation
+        <textarea name="strengths" rows="2" placeholder="{{ prev.strengths if prev and prev.strengths else '' }}">{{ cur.strengths if cur and cur.strengths else '' }}</textarea></label>
+      <label>Enjeux ou points faibles
+        <textarea name="weaknesses" rows="2" placeholder="{{ prev.weaknesses if prev and prev.weaknesses else '' }}">{{ cur.weaknesses if cur and cur.weaknesses else '' }}</textarea></label>
+      <label>Potentiel de croissance
+        <textarea name="growth_potential" rows="3" placeholder="{{ prev.growth_potential if prev and prev.growth_potential else '' }}">{{ cur.growth_potential if cur and cur.growth_potential else '' }}</textarea></label>
+    </div>
+    <p class="hint">Les textes sont conservés par année; le texte de {{ year - 1 }} apparaît en filigrane s'il n'y a rien pour {{ year }}.</p>
+  </fieldset>
+
+  <fieldset class="card">
+    <legend>5. Suivi de performance {{ year }}</legend>
+    <table class="grid">
+      <thead><tr><th>Trimestre</th><th>Résultats</th><th>Notes</th></tr></thead>
+      <tbody>
+      {% for q in range(1, 5) %}{% set rv = sc.reviews[q] %}
+        <tr>
+          <td><strong>T{{ q }}</strong>{% if rv and rv.pipedrive_note_id %}<br><span class="tag ok">note CRM</span>{% endif %}</td>
+          <td><textarea name="r__{{ q }}__result" rows="2">{{ rv.result if rv and rv.result else '' }}</textarea></td>
+          <td><textarea name="r__{{ q }}__notes" rows="2">{{ rv.notes if rv and rv.notes else '' }}</textarea></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </fieldset>
+
+  <div class="sticky-save"><button>Enregistrer la fiche</button></div>
+</form>
+
+<section class="card" id="actions">
+  <h2>4. Plan d'action</h2>
+  <table class="grid actions">
+    <thead><tr><th>Action</th><th>Responsable</th><th>Échéance</th><th>Suivi</th><th>Statut</th><th></th></tr></thead>
+    <tbody>
+    {% for a in client.actions %}
+      <tr class="{{ 'late-row' if a.is_overdue(today) }} {{ 'done-row' if not a.is_open }}">
+        <td colspan="6">
+          <form method="post" action="/clients/{{ client.id }}/actions/{{ a.id }}" class="action-row">
+            <input type="hidden" name="year" value="{{ year }}">
+            <textarea name="title" rows="2" required>{{ a.title }}</textarea>
+            <input name="owner" value="{{ a.owner or '' }}" placeholder="Responsable">
+            <input type="date" name="due_date" value="{{ a.due_date.isoformat() if a.due_date else '' }}">
+            <textarea name="follow_up" rows="2" placeholder="Suivi">{{ a.follow_up or '' }}</textarea>
+            <select name="status">
+              {% for key, label in ACTION_STATUSES %}<option value="{{ key }}" {{ 'selected' if a.status == key }}>{{ label }}</option>{% endfor %}
+            </select>
+            <div class="row-buttons">
+              <button class="small">Mettre à jour</button>
+              {% if a.pipedrive_activity_id %}<span class="tag ok" title="Activité Pipedrive #{{ a.pipedrive_activity_id }}">CRM</span>{% endif %}
+              {% if a.is_overdue(today) %}<span class="tag late">En retard</span>{% endif %}
+            </div>
+          </form>
+          <form method="post" action="/clients/{{ client.id }}/actions/{{ a.id }}/supprimer" class="inline delete"
+                onsubmit="return confirm('Supprimer cette action?')">
+            <input type="hidden" name="year" value="{{ year }}">
+            <button class="link danger">Supprimer</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+      <tr class="new-row">
+        <td colspan="6">
+          <form method="post" action="/clients/{{ client.id }}/actions" class="action-row">
+            <input type="hidden" name="year" value="{{ year }}">
+            <textarea name="title" rows="2" required placeholder="Nouvelle action"></textarea>
+            <input name="owner" placeholder="Responsable">
+            <input type="date" name="due_date">
+            <textarea name="follow_up" rows="2" placeholder="Suivi"></textarea>
+            <span></span>
+            <div class="row-buttons"><button class="small">Ajouter</button></div>
+          </form>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+</div>
+
+<aside class="side-col">
+  <section class="card">
+    <h2>Pipedrive</h2>
+    {% if not settings.pipedrive_enabled %}
+      <p class="hint">Ajoutez <code>PIPEDRIVE_API_TOKEN</code> dans le fichier <code>.env</code> pour activer l'intégration.</p>
+    {% else %}
+      {% if client.pipedrive_org_id %}
+        {% set snap = client.pipedrive_snapshot %}
+        <p>Organisation liée :
+          <a href="{{ snap.org.url if snap else '#' }}" target="_blank">{{ snap.org.name if snap else '#' ~ client.pipedrive_org_id }}</a>
+          {% if snap and snap.org.owner %}<br><small>Propriétaire : {{ snap.org.owner }}</small>{% endif %}
+        </p>
+        {% if snap %}
+        <dl class="mini">
+          <dt>Affaires ouvertes</dt><dd>{{ snap.open_deals|length }} · {{ snap.open_value|money }}</dd>
+          <dt>Gagnées {{ year }}</dt><dd>{{ snap.won_count_year }} · {{ snap.won_value_year|money }}</dd>
+          <dt>Dernière activité</dt><dd>{{ snap.last_activity_date or '—' }}</dd>
+          <dt>Prochaine activité</dt><dd>{{ snap.next_activity_date or '—' }}</dd>
+        </dl>
+        {% if snap.open_deals %}
+        <ul class="deals">
+          {% for d in snap.open_deals[:8] %}<li>{{ d.title }} <span>{{ d.value|money }}</span></li>{% endfor %}
+        </ul>
+        {% endif %}
+        <p class="hint">Synchronisé le {{ client.pipedrive_synced_at.strftime('%Y-%m-%d %H:%M') if client.pipedrive_synced_at else '—' }}</p>
+        {% endif %}
+        <form method="post" action="/clients/{{ client.id }}/pipedrive/synchroniser">
+          <input type="hidden" name="year" value="{{ year }}">
+          <button>Synchroniser</button>
+        </form>
+        <p class="hint">Envoie les actions (activités), les suivis trimestriels (notes) et les indicateurs; récupère les affaires et les activités complétées.</p>
+        <form method="post" action="/clients/{{ client.id }}/pipedrive/lier" onsubmit="return confirm('Retirer le lien Pipedrive?')">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="org_id" value="">
+          <button class="link danger">Retirer le lien</button>
+        </form>
+      {% else %}
+        <form method="post" action="/clients/{{ client.id }}/pipedrive/rechercher" class="stack">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input name="term" placeholder="Rechercher (défaut : {{ client.name }})">
+          <button>Rechercher l'organisation</button>
+        </form>
+        {% if candidates is not none %}
+          {% if candidates %}
+          <ul class="candidates">
+            {% for org in candidates %}
+            <li>
+              <form method="post" action="/clients/{{ client.id }}/pipedrive/lier" class="inline">
+                <input type="hidden" name="year" value="{{ year }}">
+                <input type="hidden" name="org_id" value="{{ org.id }}">
+                <button class="small">Lier</button> {{ org.name }} <small>#{{ org.id }}</small>
+              </form>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}<p class="hint">Aucune organisation trouvée.</p>{% endif %}
+        {% endif %}
+        <form method="post" action="/clients/{{ client.id }}/pipedrive/lier" class="stack">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input name="org_id" placeholder="ou ID d'organisation" inputmode="numeric">
+          <button class="secondary">Lier par ID</button>
+        </form>
+      {% endif %}
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Historique Topgrading</h2>
+    <ul class="history">
+      {% for a in client.assessments|sort(attribute='year', reverse=True) %}
+        <li><strong>{{ a.year }}</strong>
+          {% if a.topgrading %}<span class="grade grade-{{ a.topgrading }}">{{ a.topgrading }}</span>{% endif %}
+          {% if a.satisfaction %}· {{ a.satisfaction }}/5{% endif %}</li>
+      {% else %}<li class="hint">Aucune évaluation.</li>{% endfor %}
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Sources des données</h2>
+    <ul class="history">
+      {% for m in client.metrics|sort(attribute='year', reverse=True) %}
+        <li>{{ m.year }} {{ 'projeté' if m.scenario == 'projete' else 'réel' }} : <span class="tag">{{ m.source }}</span></li>
+      {% else %}<li class="hint">Aucune donnée financière.</li>{% endfor %}
+    </ul>
+  </section>
+
+  <form method="post" action="/clients/{{ client.id }}/supprimer" onsubmit="return confirm('Supprimer définitivement ce client et son historique?')">
+    <button class="link danger">Supprimer ce client</button>
+  </form>
+</aside>
+</div>
+{% endblock %}

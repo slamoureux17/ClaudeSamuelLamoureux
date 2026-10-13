@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Portefeuille{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Portefeuille clients {{ year }}</h1>
+  <form method="get" class="inline">
+    <input type="search" name="q" value="{{ q }}" placeholder="Client, code Serti, représentant">
+    <input type="hidden" name="tri" value="{{ tri }}">
+    <button>Rechercher</button>
+  </form>
+  {% if settings.pipedrive_enabled %}
+  <form method="post" action="/pipedrive/synchroniser" class="inline">
+    <button class="secondary">Synchroniser tout avec Pipedrive</button>
+  </form>
+  {% endif %}
+</div>
+
+<section class="kpis">
+  <div class="kpi"><span>Potentiel total</span><strong>{{ totals.potential|money }}</strong></div>
+  <div class="kpi"><span>Revenus actuels</span><strong>{{ totals.current|money }}</strong></div>
+  <div class="kpi"><span>Pénétration</span><strong>{{ totals.penetration|pct }}</strong></div>
+  <div class="kpi"><span>Gap à combler</span><strong>{{ totals.gap|money }}</strong></div>
+  <div class="kpi"><span>{{ year }} actuel / projeté</span><strong>{{ totals.attainment|pct }}</strong>
+    <small>{{ totals.actual|money }} / {{ totals.projected|money }}</small></div>
+  <div class="kpi {{ 'alert' if totals.overdue }}"><span>Actions en retard</span><strong>{{ totals.overdue }}</strong></div>
+</section>
+
+{% set sort_link = '?q=' ~ q ~ '&tri=' %}
+<table class="grid">
+  <thead>
+    <tr>
+      <th><a href="{{ sort_link }}nom">Client</a></th>
+      <th>Serti</th>
+      <th class="num"><a href="{{ sort_link }}revenus">Revenus {{ year - 1 }}</a></th>
+      <th class="num">Projeté {{ year }}</th>
+      <th class="num"><a href="{{ sort_link }}atteinte">Actuel {{ year }}</a></th>
+      <th class="num">% marge</th>
+      <th class="num"><a href="{{ sort_link }}penetration">Pénétration</a></th>
+      <th class="num"><a href="{{ sort_link }}gap">Gap</a></th>
+      <th>Topgrading</th>
+      <th>Satisf.</th>
+      <th>Services</th>
+      <th><a href="{{ sort_link }}retards">Actions</a></th>
+      <th>Prochaine échéance</th>
+      <th>CRM</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    {% set c = r.client %}
+    <tr>
+      <td><a href="/clients/{{ c.id }}?year={{ year }}"><strong>{{ c.name }}</strong></a>
+        {% if c.account_manager %}<br><small>{{ c.account_manager }}</small>{% endif %}</td>
+      <td>{{ c.serti_code or '—' }}</td>
+      <td class="num">{{ r.last_revenue|money }}</td>
+      <td class="num">{{ r.projected|money }}</td>
+      <td class="num">{{ r.actual|money }}{% if r.attainment is not none %}<br><small>{{ r.attainment|pct }}</small>{% endif %}</td>
+      <td class="num">{{ r.global_pct|pct(1) }}</td>
+      <td class="num">
+        {% if r.potential.penetration is not none %}
+        <div class="bar"><div style="width: {{ [r.potential.penetration * 100, 100]|min }}%"></div></div>
+        {% endif %}
+        {{ r.potential.penetration|pct }}
+      </td>
+      <td class="num">{{ r.potential.gap|money }}</td>
+      <td>{% if r.topgrading %}<span class="grade grade-{{ r.topgrading }}">{{ r.topgrading }}</span>{% else %}—{% endif %}</td>
+      <td>{{ r.satisfaction ~ '/5' if r.satisfaction else '—' }}</td>
+      <td>{{ r.services_count }}/{{ SERVICES|length }}</td>
+      <td>{{ r.open_actions }} ouverte(s){% if r.overdue_actions %}<br><span class="tag late">{{ r.overdue_actions }} en retard</span>{% endif %}</td>
+      <td>{% if r.next_action %}{{ r.next_action.due_date|date }}<br><small>{{ r.next_action.title[:50] }}</small>{% else %}—{% endif %}</td>
+      <td>{% if c.pipedrive_org_id %}<span class="tag ok">lié</span>{% else %}—{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="14" class="empty">Aucun client. <a href="/clients/nouveau">Créez-en un</a> ou <a href="/importer">importez un scorecard Excel</a>.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% if upcoming %}
+<h2>Prochaines actions</h2>
+<table class="grid compact">
+  <thead><tr><th>Échéance</th><th>Client</th><th>Action</th><th>Responsable</th></tr></thead>
+  <tbody>
+  {% for a, c in upcoming %}
+    <tr class="{{ 'late-row' if a.is_overdue(today) }}">
+      <td>{{ a.due_date|date }}</td>
+      <td><a href="/clients/{{ c.id }}#actions">{{ c.name }}</a></td>
+      <td>{{ a.title }}</td>
+      <td>{{ a.owner or '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

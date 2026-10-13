@@ -1,0 +1,6 @@
+code_client;nom_client;annee;departement;revenus;marge
+TRAJMF;JMF Transport (Fictif);2025;Pièces;120 500,00;25 305,00
+TRAJMF;JMF Transport (Fictif);2025;Service;22 400,00;17 248,00
+TRAJMF;JMF Transport (Fictif);2025;SAAQ;4 999,00;3 849,00
+TRAXYZ;Transport XYZ (Fictif);2025;Pièces;88 000,00;19 360,00
+TRAXYZ;Transport XYZ (Fictif);2025;Alignement;6 200,00;4 340,00

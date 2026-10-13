@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Importer{% endblock %}
+{% block content %}
+<h1>Importer des données</h1>
+
+<div class="cards">
+  <section class="card">
+    <h2>Scorecard Excel existant</h2>
+    <p>Fichier au format « Scorecard Client One-Pager » (.xlsx). Chaque feuille du classeur est importée comme un client
+      (données historiques, services, potentiel, analyse qualitative, plan d'action et suivi trimestriel).</p>
+    <form method="post" action="/importer/onepager" enctype="multipart/form-data" class="stack">
+      <input type="file" name="fichier" accept=".xlsx" required>
+      <button>Importer le scorecard</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Ventes Serti (Keyloop) – CSV</h2>
+    <p>Export d'un rapport de ventes par client. Une ligne par client / année (ou date) / département.</p>
+    <p class="hint">Colonnes reconnues : <code>code_client</code> (num. adresse Serti), <code>nom_client</code>,
+      <code>annee</code> ou <code>date</code>, <code>departement</code>, <code>revenus</code>,
+      <code>marge</code> ou <code>cout</code>, <code>scenario</code> (optionnel : reel/projete).
+      Séparateur « ; » ou « , », nombres au format 1 234,56 acceptés.</p>
+    <p class="hint">Départements « Pièces » et « Service » : calcul des % de marge. SAAQ, Alignement, Jockey, Location,
+      Unité mobile, etc. : coche automatiquement les services utilisés.</p>
+    <form method="post" action="/importer/ventes" enctype="multipart/form-data" class="stack">
+      <input type="file" name="fichier" accept=".csv,.txt" required>
+      <button>Importer les ventes</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Base de données (SQL)</h2>
+    {% if settings.source_db_url %}
+      <p>Exécute la requête <code>{{ settings.source_query_file }}</code> sur la base source configurée
+        et importe le résultat (mêmes colonnes que le CSV).</p>
+      <form method="post" action="/importer/sql"><button>Lancer l'importation SQL</button></form>
+    {% else %}
+      <p class="hint">Configurez <code>SOURCE_DB_URL</code> (et au besoin <code>SOURCE_QUERY_FILE</code>) dans le fichier
+        <code>.env</code> pour importer directement depuis votre base de données ou une réplique Serti.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

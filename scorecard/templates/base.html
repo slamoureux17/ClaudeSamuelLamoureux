@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Scorecard clients{% endblock %} – Camions BL</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Scorecard clients</a>
+    <nav>
+      <a href="/">Portefeuille</a>
+      <a href="/clients/nouveau">Nouveau client</a>
+      <a href="/importer">Importer</a>
+    </nav>
+    <span class="pd-status {{ 'on' if settings.pipedrive_enabled else 'off' }}">
+      Pipedrive {{ 'connecté' if settings.pipedrive_enabled else 'non configuré' }}
+    </span>
+  </header>
+  <main>
+    {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+    {% if err %}<div class="flash error">{{ err }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
