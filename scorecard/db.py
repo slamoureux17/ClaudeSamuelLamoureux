@@ -27,7 +27,10 @@ def init_db(url: str | None = None) -> None:
 def _migrate(engine) -> None:
     """Met à niveau une base créée par une version antérieure (create_all n'ajoute pas de colonnes)."""
     columns = {c["name"] for c in inspect(engine).get_columns("clients")}
+    review_columns = {c["name"] for c in inspect(engine).get_columns("quarterly_reviews")}
     with engine.begin() as conn:
+        if "status" not in review_columns:
+            conn.execute(text("ALTER TABLE quarterly_reviews ADD COLUMN status VARCHAR(10)"))
         if "branch" not in columns:
             conn.execute(text("ALTER TABLE clients ADD COLUMN branch VARCHAR(100)"))
         if "account_manager" in columns:

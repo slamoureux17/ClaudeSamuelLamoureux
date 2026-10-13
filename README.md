@@ -13,7 +13,7 @@ gabarit **Scorecard Client One-Pager** (`exemples/Scorecard_Client_OnePager.xlsx
 | 2. Potentiel global | Potentiel annuel estimé, revenus actuels (saisis ou, par défaut, ceux de l'année précédente), % de pénétration et gap à combler. |
 | 3. Analyse qualitative | Topgrading (A–D) et satisfaction (/5) par année, points forts, enjeux, potentiel de croissance (conservés par année). |
 | 4. Plan d'action | Actions illimitées avec responsable, échéance, suivi et statut; retards signalés. |
-| 5. Suivi de performance | Résultats et notes par trimestre (T1–T4). |
+| 5. Suivi de performance | Résultats et notes par trimestre (T1–T4), avec un code de couleur vert / jaune / rouge sur la colonne Résultats (repris dans le portefeuille, l'export Excel et les notes Pipedrive). |
 
 En plus :
 
@@ -56,6 +56,17 @@ Les valeurs importées restent modifiables dans la fiche; la source (excel / ser
 de chaque année est affichée.
 
 ## Pipedrive
+
+### Exporter le plan d'action
+- **Exporter les actions vers Pipedrive** (section 4 de la fiche) : crée une activité (tâche) pour chaque
+  action ouverte et met à jour celles déjà exportées. Le bouton **Exporter vers Pipedrive** sur une action
+  l'enregistre et l'exporte seule.
+- **CSV pour Pipedrive** (fiche) ou **Actions ouvertes (CSV Pipedrive)** (portefeuille, filtrable par
+  succursale) : fichier à importer dans Pipedrive › Importer des données › Feuille de calcul › Activités
+  (colonnes Sujet, Type, Date d'échéance, Organisation, Assigné à, Note, Fait). Pratique sans jeton API
+  ou pour un premier chargement en lot.
+
+### Synchronisation complète
 
 1. Récupérez votre jeton : Pipedrive › Paramètres personnels › API.
 2. Dans `.env` : `PIPEDRIVE_API_TOKEN=...` et `PIPEDRIVE_DOMAIN=<sous-domaine>`.

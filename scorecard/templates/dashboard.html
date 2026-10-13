@@ -14,6 +14,7 @@
     <input type="hidden" name="tri" value="{{ tri }}">
     <button>Rechercher</button>
   </form>
+  <a class="button secondary" href="/actions-pipedrive.csv?succursale={{ succursale|urlencode }}">Actions ouvertes (CSV Pipedrive)</a>
   {% if settings.pipedrive_enabled %}
   <form method="post" action="/pipedrive/synchroniser" class="inline">
     <button class="secondary">Synchroniser tout avec Pipedrive</button>
@@ -45,6 +46,7 @@
       <th class="num">% marge</th>
       <th class="num"><a href="{{ sort_link }}penetration">Pénétration</a></th>
       <th class="num"><a href="{{ sort_link }}gap">Gap</a></th>
+      <th>Suivi T1–T4</th>
       <th>Topgrading</th>
       <th>Satisf.</th>
       <th>Services</th>
@@ -72,6 +74,7 @@
         {{ r.potential.penetration|pct }}
       </td>
       <td class="num">{{ r.potential.gap|money }}</td>
+      <td class="dots">{% for q, st in r.review_statuses %}<span class="status-dot {{ st or 'empty' }}" title="T{{ q }}{{ ' : ' ~ st if st else '' }}"></span>{% endfor %}</td>
       <td>{% if r.topgrading %}<span class="grade grade-{{ r.topgrading }}">{{ r.topgrading }}</span>{% else %}—{% endif %}</td>
       <td>{{ r.satisfaction ~ '/5' if r.satisfaction else '—' }}</td>
       <td>{{ r.services_count }}/{{ SERVICES|length }}</td>
@@ -80,7 +83,7 @@
       <td>{% if c.pipedrive_org_id %}<span class="tag ok">lié</span>{% else %}—{% endif %}</td>
     </tr>
   {% else %}
-    <tr><td colspan="15" class="empty">Aucun client. <a href="/clients/nouveau">Créez-en un</a> ou <a href="/importer">importez un scorecard Excel</a>.</td></tr>
+    <tr><td colspan="16" class="empty">Aucun client. <a href="/clients/nouveau">Créez-en un</a> ou <a href="/importer">importez un scorecard Excel</a>.</td></tr>
   {% endfor %}
   </tbody>
 </table>

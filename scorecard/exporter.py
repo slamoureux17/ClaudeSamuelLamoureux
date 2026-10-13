@@ -19,6 +19,8 @@ WRAP = Alignment(wrap_text=True, vertical="top")
 MONEY = '#,##0 $;-#,##0 $'
 PCT = "0.0%"
 TEAM_HEADER_ROW = 11
+# Couleurs Excel du suivi trimestriel (aussi relues à l'importation).
+STATUS_FILLS = {"vert": "C6EFCE", "jaune": "FFEB9C", "rouge": "FFC7CE"}
 
 
 def export_client(client: Client, year: int) -> bytes:
@@ -132,7 +134,10 @@ def write_sheet(ws, client: Client, year: int) -> None:
     for q in range(1, 5):
         review = sc["reviews"][q]
         ws.cell(4 + q, 8, f"T{q}").font = BOLD
-        ws.cell(4 + q, 9, review.result if review else None).alignment = WRAP
+        result_cell = ws.cell(4 + q, 9, review.result if review else None)
+        result_cell.alignment = WRAP
+        if review and review.status:
+            result_cell.fill = PatternFill("solid", fgColor=STATUS_FILLS[review.status])
         ws.cell(4 + q, 10, review.notes if review else None).alignment = WRAP
 
     # Équipe client (colonnes H..I, sous le suivi trimestriel)

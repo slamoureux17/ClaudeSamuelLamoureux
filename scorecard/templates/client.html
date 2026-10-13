@@ -173,10 +173,17 @@
     <table class="grid">
       <thead><tr><th>Trimestre</th><th>Résultats</th><th>Notes</th></tr></thead>
       <tbody>
-      {% for q in range(1, 5) %}{% set rv = sc.reviews[q] %}
+      {% for q in range(1, 5) %}{% set rv = sc.reviews[q] %}{% set st = rv.status if rv and rv.status else '' %}
         <tr>
           <td><strong>T{{ q }}</strong>{% if rv and rv.pipedrive_note_id %}<br><span class="tag ok">note CRM</span>{% endif %}</td>
-          <td><textarea name="r__{{ q }}__result" rows="2">{{ rv.result if rv and rv.result else '' }}</textarea></td>
+          <td class="result-cell status-{{ st or 'none' }}">
+            <select name="r__{{ q }}__status" class="status-select" aria-label="Statut T{{ q }}"
+                    onchange="this.parentElement.className = 'result-cell status-' + (this.value || 'none')">
+              <option value="">Statut…</option>
+              {% for key, label in REVIEW_STATUSES %}<option value="{{ key }}" {{ 'selected' if st == key }}>{{ label }}</option>{% endfor %}
+            </select>
+            <textarea name="r__{{ q }}__result" rows="2">{{ rv.result if rv and rv.result else '' }}</textarea>
+          </td>
           <td><textarea name="r__{{ q }}__notes" rows="2">{{ rv.notes if rv and rv.notes else '' }}</textarea></td>
         </tr>
       {% endfor %}
@@ -188,7 +195,22 @@
 </form>
 
 <section class="card" id="actions">
-  <h2>4. Plan d'action</h2>
+  <div class="section-head">
+    <h2>4. Plan d'action</h2>
+    <div class="row-buttons">
+      {% if settings.pipedrive_enabled and client.pipedrive_org_id %}
+      <form method="post" action="/clients/{{ client.id }}/pipedrive/actions" class="inline">
+        <input type="hidden" name="year" value="{{ year }}">
+        <button class="small">Exporter les actions vers Pipedrive</button>
+      </form>
+      {% endif %}
+      <a class="button secondary small" href="/clients/{{ client.id }}/actions-pipedrive.csv">CSV pour Pipedrive</a>
+    </div>
+  </div>
+  {% if not (settings.pipedrive_enabled and client.pipedrive_org_id) %}
+  <p class="hint">{% if not settings.pipedrive_enabled %}Pipedrive n'est pas configuré{% else %}Liez ce client à son organisation Pipedrive (panneau de droite){% endif %} pour exporter directement.
+    En attendant, le fichier CSV s'importe dans Pipedrive › Importer des données › Activités.</p>
+  {% endif %}
   <table class="grid actions">
     <thead><tr><th>Action</th><th>Responsable</th><th>Échéance</th><th>Suivi</th><th>Statut</th><th></th></tr></thead>
     <tbody>
@@ -206,6 +228,10 @@
             </select>
             <div class="row-buttons">
               <button class="small">Mettre à jour</button>
+              {% if settings.pipedrive_enabled and client.pipedrive_org_id and (a.is_open or a.pipedrive_activity_id) %}
+              <button class="small secondary" formaction="/clients/{{ client.id }}/actions/{{ a.id }}/pipedrive">
+                {{ 'Mettre à jour dans Pipedrive' if a.pipedrive_activity_id else 'Exporter vers Pipedrive' }}</button>
+              {% endif %}
               {% if a.pipedrive_activity_id %}<span class="tag ok" title="Activité Pipedrive #{{ a.pipedrive_activity_id }}">CRM</span>{% endif %}
               {% if a.is_overdue(today) %}<span class="tag late">En retard</span>{% endif %}
             </div>

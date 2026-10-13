@@ -24,12 +24,15 @@ from .models import (
     ACTION_STATUSES,
     CX_REP,
     DIRECTION_TITLES,
+    REVIEW_STATUS_LABELS,
+    REVIEW_STATUSES,
     SERVICES,
     TEAM_ROLES,
     TOPGRADING_GRADES,
     Action,
     Client,
 )
+from .pipedrive_csv import actions_csv
 from .repository import set_services, set_team, upsert_assessment, upsert_metrics, upsert_review
 from .textutil import parse_date, parse_number, parse_pct
 
@@ -75,7 +78,8 @@ def _input_money(value) -> str:
 
 templates.env.filters.update(money=_money, pct=_pct, date=_date, input_pct=_input_pct, input_money=_input_money)
 templates.env.globals.update(SERVICES=SERVICES, ACTION_STATUSES=ACTION_STATUSES, TOPGRADING=TOPGRADING_GRADES,
-                             TEAM_ROLES=TEAM_ROLES, DIRECTION_TITLES=DIRECTION_TITLES)
+                             TEAM_ROLES=TEAM_ROLES, DIRECTION_TITLES=DIRECTION_TITLES,
+                             REVIEW_STATUSES=REVIEW_STATUSES)
 
 
 def _redirect(url: str, msg: str | None = None, error: bool = False) -> RedirectResponse:
@@ -239,9 +243,10 @@ async def save_scorecard(request: Request, client_id: int, session: Session = De
 
     for q in range(1, 5):
         result, notes = get(f"r__{q}__result") or None, get(f"r__{q}__notes") or None
+        status = get(f"r__{q}__status") if get(f"r__{q}__status") in REVIEW_STATUS_LABELS else None
         existing = next((r for r in client.reviews if r.year == year and r.quarter == q), None)
-        if existing is not None or result or notes:
-            upsert_review(session, client, year, q, result=result, notes=notes)
+        if existing is not None or result or notes or status:
+            upsert_review(session, client, year, q, result=result, notes=notes, status=status)
 
     session.commit()
     return _redirect(f"/clients/{client.id}?year={year}", "Fiche enregistrée.")
@@ -279,10 +284,8 @@ def add_action(client_id: int, title: str = Form(...), owner: str = Form(""), du
     return _redirect(f"/clients/{client.id}?year={year or ''}#actions", "Action ajoutée.")
 
 
-@app.post("/clients/{client_id}/actions/{action_id}")
-def update_action(client_id: int, action_id: int, title: str = Form(...), owner: str = Form(""),
-                  due_date: str = Form(""), follow_up: str = Form(""), status: str = Form("a_faire"),
-                  year: int = Form(0), session: Session = Depends(get_session)):
+def _apply_action_form(session: Session, client_id: int, action_id: int, title: str, owner: str, due_date: str,
+                       follow_up: str, status: str) -> Action:
     action = session.get(Action, action_id)
     if action is None or action.client_id != client_id:
         raise HTTPException(404, "Action introuvable")
@@ -291,8 +294,72 @@ def update_action(client_id: int, action_id: int, title: str = Form(...), owner:
     if status != action.status:
         action.done_date = dt.date.today() if status == "fait" else None
     action.status = status if status in dict(ACTION_STATUSES) else action.status
+    return action
+
+
+@app.post("/clients/{client_id}/actions/{action_id}")
+def update_action(client_id: int, action_id: int, title: str = Form(...), owner: str = Form(""),
+                  due_date: str = Form(""), follow_up: str = Form(""), status: str = Form("a_faire"),
+                  year: int = Form(0), session: Session = Depends(get_session)):
+    _apply_action_form(session, client_id, action_id, title, owner, due_date, follow_up, status)
     session.commit()
     return _redirect(f"/clients/{client_id}?year={year or ''}#actions", "Action mise à jour.")
+
+
+@app.post("/clients/{client_id}/actions/{action_id}/pipedrive")
+def export_one_action(client_id: int, action_id: int, title: str = Form(...), owner: str = Form(""),
+                      due_date: str = Form(""), follow_up: str = Form(""), status: str = Form("a_faire"),
+                      year: int = Form(0), session: Session = Depends(get_session)):
+    """Enregistre l'action puis l'exporte (création ou mise à jour de l'activité Pipedrive)."""
+    action = _apply_action_form(session, client_id, action_id, title, owner, due_date, follow_up, status)
+    url = f"/clients/{client_id}?year={year or ''}#actions"
+    try:
+        with _pipedrive_client() as pd:
+            created, updated = pipedrive.export_actions(pd, action.client, [action])
+    except pipedrive.PipedriveError as exc:
+        session.commit()
+        return _redirect(url, str(exc), error=True)
+    session.commit()
+    if created:
+        return _redirect(url, "Activité créée dans Pipedrive.")
+    if updated:
+        return _redirect(url, "Activité mise à jour dans Pipedrive.")
+    return _redirect(url, "Action fermée sans activité Pipedrive: rien à exporter.")
+
+
+@app.post("/clients/{client_id}/pipedrive/actions")
+def export_all_actions(client_id: int, year: int = Form(0), session: Session = Depends(get_session)):
+    client = _client_or_404(session, client_id)
+    url = f"/clients/{client_id}?year={year or ''}#actions"
+    try:
+        with _pipedrive_client() as pd:
+            created, updated = pipedrive.export_actions(pd, client)
+    except pipedrive.PipedriveError as exc:
+        session.commit()  # conserve les activités déjà créées
+        return _redirect(url, str(exc), error=True)
+    session.commit()
+    return _redirect(url, f"Plan d'action exporté vers Pipedrive: {created} activité(s) créée(s), "
+                          f"{updated} mise(s) à jour.")
+
+
+def _csv_response(data: bytes, filename: str) -> Response:
+    return Response(data, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"})
+
+
+@app.get("/clients/{client_id}/actions-pipedrive.csv")
+def export_actions_csv(client_id: int, session: Session = Depends(get_session)):
+    client = _client_or_404(session, client_id)
+    return _csv_response(actions_csv([client]),
+                         f"Actions_Pipedrive_{(client.serti_code or client.name).replace(' ', '_')}.csv")
+
+
+@app.get("/actions-pipedrive.csv")
+def export_all_actions_csv(succursale: str = "", session: Session = Depends(get_session)):
+    clients = session.scalars(select(Client).order_by(Client.name)).all()
+    if succursale:
+        clients = [c for c in clients if c.branch == succursale]
+    return _csv_response(actions_csv(clients), f"Actions_Pipedrive_{dt.date.today().isoformat()}.csv")
 
 
 @app.post("/clients/{client_id}/actions/{action_id}/supprimer")

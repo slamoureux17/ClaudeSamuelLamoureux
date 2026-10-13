@@ -60,6 +60,10 @@ DIRECTION_TITLES = ["DG", "VP", "Co-Président"]
 ACTION_STATUSES = [("a_faire", "À faire"), ("en_cours", "En cours"), ("fait", "Fait"), ("annule", "Annulé")]
 ACTION_STATUS_LABELS = dict(ACTION_STATUSES)
 
+# Code de couleur du suivi trimestriel (colonne Résultats).
+REVIEW_STATUSES = [("vert", "Vert – sur la cible"), ("jaune", "Jaune – à surveiller"), ("rouge", "Rouge – sous la cible")]
+REVIEW_STATUS_LABELS = dict(REVIEW_STATUSES)
+
 
 class Base(DeclarativeBase):
     pass
@@ -220,6 +224,7 @@ class QuarterlyReview(Base):
     quarter: Mapped[int] = mapped_column(Integer)  # 1..4
     result: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str | None] = mapped_column(String(10))  # vert | jaune | rouge
     pipedrive_note_id: Mapped[int | None] = mapped_column(Integer)
 
     client: Mapped[Client] = relationship(back_populates="reviews")

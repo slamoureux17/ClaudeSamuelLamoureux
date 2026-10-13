@@ -37,7 +37,8 @@ def test_import_edit_and_export(web):
             "team__ventes_camions__name": "Marc Roy", "team__direction__name": "Samuel L.",
             "team__direction__title": "Co-Président", "team__conseiller_technique__name": "Éric B.",
             "other_count": "2", "other__0__title": "Représentant pièces", "other__0__name": "Pascal",
-            "other__1__title": "", "other__1__name": ""}
+            "other__1__title": "", "other__1__name": "",
+            "r__1__status": "rouge", "r__2__status": "vert", "r__3__status": "invalide"}
     r = web.post("/clients/1/fiche", data=form, follow_redirects=False)
     assert r.status_code == 303
 
@@ -52,12 +53,15 @@ def test_import_edit_and_export(web):
     assert "JMF Transport" in web.get("/?q=julie").text
 
     page = web.get("/clients/1")
+    assert 'class="result-cell status-rouge"' in page.text and 'class="result-cell status-vert"' in page.text
+    assert 'class="result-cell status-none"' in page.text  # T3: statut invalide ignoré
     assert 'value="Marc Roy"' in page.text and "<option selected>Co-Président</option>" in page.text
 
     xlsx = web.get("/clients/1/export.xlsx?year=2026")
     ws = openpyxl.load_workbook(io.BytesIO(xlsx.content)).active
     assert ws["B1"].value == "JMF Transport"
     assert ws["E6"].value == 60000 and ws["D6"].value == 180000
+    assert ws["I5"].fill.fgColor.rgb.endswith("FFC7CE") and ws["I6"].fill.fgColor.rgb.endswith("C6EFCE")
     values = [c.value for row in ws.iter_rows() for c in row if c.value]
     assert "Proposer Excelerator" in values and "Objectif T2 atteint" in values and "B" in values
 
@@ -72,6 +76,7 @@ def test_import_edit_and_export(web):
         [client] = import_onepager(s, xlsx.content)
         assert client.potential_annual == 900000
         assert client.branch == "Drummondville" and client.cx_rep == "Julie Côté"
+        assert {r.quarter: r.status for r in client.reviews} == {1: "rouge", 2: "vert"}
         direction = client.team_member("direction")
         assert (direction.name, direction.title) == ("Samuel L.", "Co-Président")
         assert [(m.title, m.name) for m in client.other_team] == [("Représentant pièces", "Pascal")]
@@ -103,12 +108,25 @@ def test_migrates_old_database(tmp_path):
     db.init_db(f"sqlite:///{path}")
     with db._SessionLocal() as s:
         from scorecard.models import Client
+        assert s.execute(__import__("sqlalchemy").text("SELECT status FROM quarterly_reviews")).all() == []
         client = s.get(Client, 1)
         assert client.branch is None
         assert [(m.title, m.name) for m in client.other_team] == [("Responsable du compte", "Maxime")]
     db.init_db(f"sqlite:///{path}")  # idempotent
     with db._SessionLocal() as s:
         assert len(s.get(Client, 1).team) == 1
+
+
+def test_actions_csv_for_pipedrive(web):
+    with open(EXAMPLE / "Scorecard_Client_OnePager.xlsx", "rb") as f:
+        web.post("/importer/onepager", files={"fichier": ("s.xlsx", f)})
+    r = web.get("/clients/1/actions-pipedrive.csv")
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    lines = r.content.decode("utf-8-sig").splitlines()
+    assert lines[0] == "Sujet;Type;Date d'échéance;Organisation;Assigné à;Note;Fait"
+    assert len(lines) == 3  # 2 actions ouvertes; l'action « Fait » est exclue
+    assert "2025-11-01;JMF Transport (Fictif);Maxime" in lines[1]
+    assert web.get("/actions-pipedrive.csv").content == r.content
 
 
 def test_pipedrive_disabled_shows_hint(web):

@@ -151,5 +151,6 @@ def portfolio_row(client: Client, year: int, today: dt.date | None = None) -> di
         "open_actions": len(open_actions),
         "overdue_actions": sum(1 for a in open_actions if a.is_overdue(today)),
         "next_action": next_action,
+        "review_statuses": [(q, r.status if (r := find_review(client, year, q)) else None) for q in range(1, 5)],
         "services_count": len(used_services(client, year, REEL) or used_services(client, year - 1, REEL)),
     }

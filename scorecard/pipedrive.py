@@ -18,7 +18,7 @@ import httpx
 
 from .config import Settings
 from .metrics import latest_assessment, potential
-from .models import ACTION_STATUS_LABELS, Action, Client, QuarterlyReview
+from .models import ACTION_STATUS_LABELS, REVIEW_STATUS_LABELS, Action, Client, QuarterlyReview
 from .textutil import normalize
 
 
@@ -148,10 +148,27 @@ def push_action(pd: PipedriveClient, client: Client, action: Action) -> None:
         action.pipedrive_activity_id = created["id"]
 
 
+def export_actions(pd: PipedriveClient, client: Client, actions: list[Action] | None = None) -> tuple[int, int]:
+    """Exporte le plan d'action (ou les actions données) en activités. Retourne (créées, mises à jour)."""
+    if not client.pipedrive_org_id:
+        raise PipedriveError(f"{client.name} n'est pas lié à une organisation Pipedrive.")
+    created = updated = 0
+    for action in client.actions if actions is None else actions:
+        had_activity = bool(action.pipedrive_activity_id)
+        push_action(pd, client, action)
+        if had_activity:
+            updated += 1
+        elif action.pipedrive_activity_id:
+            created += 1
+    return created, updated
+
+
 def push_review(pd: PipedriveClient, client: Client, review: QuarterlyReview) -> None:
-    if not (review.result or review.notes):
+    if not (review.result or review.notes or review.status):
         return
     parts = [f"<b>Suivi de performance T{review.quarter} {review.year}</b>"]
+    if review.status:
+        parts.append(f"Statut: {REVIEW_STATUS_LABELS[review.status]}")
     if review.result:
         parts.append(f"Résultats: {review.result}")
     if review.notes:

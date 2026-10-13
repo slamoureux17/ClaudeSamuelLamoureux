@@ -65,6 +65,23 @@ def import_onepager(session: Session, data: bytes) -> list[Client]:
     return clients
 
 
+def _fill_status(cell) -> str | None:
+    """Couleur de remplissage de la cellule Résultats -> vert / jaune / rouge."""
+    if cell.fill is None or cell.fill.fill_type != "solid":
+        return None
+    rgb = str(cell.fill.fgColor.rgb or "")[-6:].upper()
+    if not rgb or not all(ch in "0123456789ABCDEF" for ch in rgb):
+        return None
+    r, g, b = (int(rgb[i:i + 2], 16) for i in (0, 2, 4))
+    if g > r + 20 and g > b:
+        return "vert"
+    if r > 180 and g > 170 and b < 170:
+        return "jaune"
+    if r > g + 30 and r > b + 30:
+        return "rouge"
+    return None
+
+
 def _import_team(ws, client: Client) -> None:
     """Bloc « Équipe client » (colonne H: rôle, colonne I: nom), tel que produit par l'export."""
     header = next((r for r in range(1, ws.max_row + 1) if normalize(ws.cell(r, 8).value) == "equipe client"), None)
@@ -210,8 +227,9 @@ def _import_sheet(session: Session, ws, ws_values) -> Client | None:
             if not match:
                 continue
             result, notes = ws.cell(row, 9).value, ws.cell(row, 10).value
-            if result or notes:
+            status = _fill_status(ws.cell(row, 9))
+            if result or notes or status:
                 upsert_review(session, client, current_year, int(match.group(1)),
                               result=str(result).strip() if result else None,
-                              notes=str(notes).strip() if notes else None)
+                              notes=str(notes).strip() if notes else None, status=status)
     return client

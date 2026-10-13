@@ -86,6 +86,40 @@ def test_sync_client_pushes_and_pulls():
     assert snapshot["org"]["url"] == "https://camionsbl.pipedrive.com/organization/42"
 
 
+def test_export_actions_creates_then_updates():
+    fake = FakePipedrive()
+    client = make_client()
+    with pipedrive.PipedriveClient(Settings(pipedrive_api_token="tok"),
+                                   transport=httpx.MockTransport(fake.handler)) as pd:
+        assert pipedrive.export_actions(pd, client) == (1, 1)  # action 1 créée, action 2 mise à jour, 3 fermée ignorée
+        assert pipedrive.export_actions(pd, client, [client.actions[0]]) == (0, 1)
+    assert not any(path.startswith("/organizations") for _, path, _ in fake.calls)  # export seul: pas de synchro
+
+
+def test_export_actions_requires_link():
+    client = make_client()
+    client.pipedrive_org_id = None
+    with pipedrive.PipedriveClient(Settings(pipedrive_api_token="tok"),
+                                   transport=httpx.MockTransport(FakePipedrive().handler)) as pd:
+        try:
+            pipedrive.export_actions(pd, client)
+        except pipedrive.PipedriveError as exc:
+            assert "n'est pas lié" in str(exc)
+        else:
+            raise AssertionError("PipedriveError attendue")
+
+
+def test_review_note_includes_status():
+    fake = FakePipedrive()
+    client = make_client()
+    client.reviews[0].status = "jaune"
+    with pipedrive.PipedriveClient(Settings(pipedrive_api_token="tok"),
+                                   transport=httpx.MockTransport(fake.handler)) as pd:
+        pipedrive.push_review(pd, client, client.reviews[0])
+    [note] = [body for method, path, body in fake.calls if path == "/notes"]
+    assert "Statut: Jaune – à surveiller" in note["content"]
+
+
 def test_find_organization_prefers_exact_name():
     fake = FakePipedrive()
     settings = Settings(pipedrive_api_token="tok")
